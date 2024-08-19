@@ -1,0 +1,57 @@
+{
+  "size": 100,
+  "query": {
+    "bool": {
+      "filter": [
+        {
+          "bool": {
+            "must": [
+              {
+                "script": {
+                  "script": {
+                    "source": "def policySet = new HashSet(doc['policy.all.keyword']); def querySet = new HashSet(params.querySet); return querySet.containsAll(policySet);",
+                    "params": {
+                      "querySet": {{ entitlements.all | tojson }}
+                    }
+                  }
+                }
+              }
+            ],
+            "should": [
+            {% for attr_key, attr_value in entitlements.items() %}
+              {% if attr_key != "all" %}
+              {
+                "bool": {
+                  "should": [
+                    {
+                      "terms_set": {
+                        "policy.{{ attr_key }}.keyword": {
+                          "terms": {{ attr_value | tojson }},
+                          "minimum_should_match_script": {
+                            "source": "1"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "bool": {
+                        "must_not": {
+                          "exists": {
+                            "field": "policy.{{ attr_key }}.keyword"
+                          }
+                        }
+                      }
+                    }
+                  ]
+                }
+              }{{ "," if not loop.last }}
+              {% endif %}
+            {% endfor %}
+            ],
+            "minimum_should_match": 1
+          }
+        }
+      ]
+    }
+  }
+}
